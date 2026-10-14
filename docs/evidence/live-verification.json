@@ -1,0 +1,14 @@
+{
+  "accounts": {
+    "codex": 621,
+    "cwork": 62,
+    "ccomm": 5,
+    "csay": 19,
+    "crim": 9
+  },
+  "first_complete_seconds": 0.492,
+  "visible_rows": 785,
+  "loaded_sets_unchanged": true,
+  "detail_has_user": true,
+  "detail_has_assistant": true
+}

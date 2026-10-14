@@ -1,0 +1,12 @@
+{
+  "kind": "live_readonly",
+  "rows": 715,
+  "initial_ms": 255.92179101658985,
+  "loaded_poll_ms": 16.566166013944894,
+  "loaded_poll_rpc": {
+    "thread/loaded/list": 5,
+    "thread/read": 5,
+    "thread/turns/list": 5
+  },
+  "healthy_accounts": 5
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "live_read_only_single_sample",
+  "rows": 715,
+  "initial_ms": 158.68887497344986,
+  "loaded_poll_ms": 2.436500013573095,
+  "loaded_poll_rpc": {
+    "thread/loaded/list": 5,
+    "thread/read": 6
+  },
+  "healthy_accounts": 5
+}

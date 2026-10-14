@@ -1,0 +1,24 @@
+[
+  {
+    "account": "cwork",
+    "source": "vscode",
+    "already_loaded": true,
+    "native_resume_confirmed": true,
+    "status": "Ready",
+    "screen_has_resume_error": false,
+    "wait_seconds": 0.5,
+    "duplicate_reuses_same_tab": true,
+    "owned_qa_tab_closed": true
+  },
+  {
+    "account": "codex",
+    "source": "cli",
+    "already_loaded": false,
+    "test_scope": "stored greeting conversation; no prompt sent",
+    "native_resume_confirmed": true,
+    "status": "Ready",
+    "wait_seconds": 1.0,
+    "duplicate_reuses_same_tab": true,
+    "owned_qa_tab_closed": true
+  }
+]

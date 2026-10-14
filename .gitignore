@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.coverage
+dist/
+build/
+artifacts/private/
+.DS_Store
+.env
+.env.*
+auth.json
+state.json
+*.sqlite
+*.sqlite-*
+*.jsonl
+docs/evidence/workspace-groups.json

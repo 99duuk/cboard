@@ -1,0 +1,39 @@
+{
+  "kind": "synthetic",
+  "size": [
+    120,
+    35
+  ],
+  "results": [
+    {
+      "rows": 700,
+      "rounds": 5,
+      "index_lookup_ms": 0.00119249991257675,
+      "search_ms": 0.30868196627125144,
+      "unchanged_render_median_ms": 1.5107909857761115,
+      "loaded_poll_median_ms": 13.477958011208102,
+      "loaded_poll_cpu_ms": 15.984200000000005,
+      "loaded_poll_table_rebuilds": 0,
+      "loaded_poll_cache_writes": 0,
+      "source_poll_rpc_per_round": {
+        "thread/loaded/list": 1.0,
+        "thread/read": 20.0
+      }
+    },
+    {
+      "rows": 2000,
+      "rounds": 5,
+      "index_lookup_ms": 0.0023204150784295052,
+      "search_ms": 0.8498055326829975,
+      "unchanged_render_median_ms": 2.936083998065442,
+      "loaded_poll_median_ms": 21.551582991378382,
+      "loaded_poll_cpu_ms": 24.081200000000003,
+      "loaded_poll_table_rebuilds": 0,
+      "loaded_poll_cache_writes": 0,
+      "source_poll_rpc_per_round": {
+        "thread/loaded/list": 1.0,
+        "thread/read": 20.0
+      }
+    }
+  ]
+}

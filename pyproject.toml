@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cboard"
+version = "0.1.0"
+description = "A shared command center for local Codex accounts"
+requires-python = ">=3.11"
+dependencies = ["textual>=1", "websockets>=14"]
+
+[project.optional-dependencies]
+test = ["pytest>=8", "pytest-asyncio>=0.25"]
+
+[project.scripts]
+cboard = "cboard.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+cboard = ["ui/*.tcss"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

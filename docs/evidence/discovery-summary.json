@@ -1,0 +1,238 @@
+{
+  "observed_date": "2026-10-14",
+  "timezone": "Asia/Seoul",
+  "scope": "Read-only discovery against existing account daemons; product not implemented",
+  "queries": [
+    "initialize",
+    "thread/loaded/list",
+    "thread/list",
+    "thread/read",
+    "thread/turns/list"
+  ],
+  "thread_list_params": {
+    "limit": 100,
+    "sortKey": "updated_at",
+    "archived": false,
+    "useStateDbOnly": true
+  },
+  "accounts": [
+    {
+      "account": "codex",
+      "transport": "websocket-over-existing-unix-socket",
+      "server_version": "codex-tui/0.162.1",
+      "loaded_before_count": 11,
+      "list_count": 621,
+      "pages": 7,
+      "complete": true,
+      "status_counts": {
+        "idle": 1,
+        "notLoaded": 620
+      },
+      "source_counts": {
+        "vscode": 96,
+        "cli": 525
+      },
+      "loaded_threads_found_in_list": 1,
+      "history_mode": "paginated",
+      "history_probe": {
+        "turns": 3,
+        "item_types": {
+          "userMessage": 3,
+          "agentMessage": 15,
+          "commandExecution": 89,
+          "contextCompaction": 1,
+          "reasoning": 100,
+          "imageView": 4,
+          "subAgentActivity": 23
+        },
+        "turn_fields": [
+          "completedAt",
+          "durationMs",
+          "error",
+          "id",
+          "items",
+          "itemsView",
+          "rootTurnId",
+          "startedAt",
+          "status"
+        ]
+      },
+      "loaded_after_count": 11,
+      "loaded_set_unchanged": true
+    },
+    {
+      "account": "cwork",
+      "transport": "websocket-over-existing-unix-socket",
+      "server_version": "codex-tui/0.162.1",
+      "loaded_before_count": 1,
+      "list_count": 62,
+      "pages": 1,
+      "complete": true,
+      "status_counts": {
+        "idle": 1,
+        "notLoaded": 61
+      },
+      "source_counts": {
+        "vscode": 22,
+        "cli": 40
+      },
+      "loaded_threads_found_in_list": 1,
+      "history_mode": "paginated",
+      "history_probe": {
+        "turns": 3,
+        "item_types": {
+          "userMessage": 3,
+          "reasoning": 33,
+          "agentMessage": 13,
+          "commandExecution": 44,
+          "contextCompaction": 1,
+          "imageView": 2
+        },
+        "turn_fields": [
+          "completedAt",
+          "durationMs",
+          "error",
+          "id",
+          "items",
+          "itemsView",
+          "rootTurnId",
+          "startedAt",
+          "status"
+        ]
+      },
+      "loaded_after_count": 1,
+      "loaded_set_unchanged": true
+    },
+    {
+      "account": "ccomm",
+      "transport": "websocket-over-existing-unix-socket",
+      "server_version": "codex-tui/0.162.1",
+      "loaded_before_count": 3,
+      "list_count": 5,
+      "pages": 1,
+      "complete": true,
+      "status_counts": {
+        "active": 1,
+        "idle": 2,
+        "notLoaded": 2
+      },
+      "source_counts": {
+        "vscode": 5
+      },
+      "loaded_threads_found_in_list": 3,
+      "history_mode": "paginated",
+      "history_probe": {
+        "turns": 3,
+        "item_types": {
+          "userMessage": 3,
+          "agentMessage": 6,
+          "commandExecution": 15,
+          "reasoning": 13,
+          "mcpToolCall": 2,
+          "webSearch": 2,
+          "imageView": 1
+        },
+        "turn_fields": [
+          "completedAt",
+          "durationMs",
+          "error",
+          "id",
+          "items",
+          "itemsView",
+          "rootTurnId",
+          "startedAt",
+          "status"
+        ]
+      },
+      "loaded_after_count": 3,
+      "loaded_set_unchanged": true
+    },
+    {
+      "account": "csay",
+      "transport": "websocket-over-existing-unix-socket",
+      "server_version": "codex-tui/0.162.1",
+      "loaded_before_count": 1,
+      "list_count": 19,
+      "pages": 1,
+      "complete": true,
+      "status_counts": {
+        "idle": 1,
+        "notLoaded": 18
+      },
+      "source_counts": {
+        "vscode": 13,
+        "cli": 6
+      },
+      "loaded_threads_found_in_list": 1,
+      "history_mode": "paginated",
+      "history_probe": {
+        "turns": 3,
+        "item_types": {
+          "userMessage": 3,
+          "reasoning": 46,
+          "agentMessage": 10,
+          "commandExecution": 54
+        },
+        "turn_fields": [
+          "completedAt",
+          "durationMs",
+          "error",
+          "id",
+          "items",
+          "itemsView",
+          "rootTurnId",
+          "startedAt",
+          "status"
+        ]
+      },
+      "loaded_after_count": 1,
+      "loaded_set_unchanged": true
+    },
+    {
+      "account": "crim",
+      "transport": "websocket-over-existing-unix-socket",
+      "server_version": "codex-tui/0.162.1",
+      "loaded_before_count": 0,
+      "list_count": 9,
+      "pages": 1,
+      "complete": true,
+      "status_counts": {
+        "notLoaded": 9
+      },
+      "source_counts": {
+        "vscode": 9
+      },
+      "loaded_threads_found_in_list": 0,
+      "history_mode": "paginated",
+      "history_probe": {
+        "turns": 3,
+        "item_types": {
+          "userMessage": 3,
+          "reasoning": 230,
+          "agentMessage": 24,
+          "commandExecution": 116,
+          "fileChange": 15,
+          "sleep": 28,
+          "contextCompaction": 1
+        },
+        "turn_fields": [
+          "completedAt",
+          "durationMs",
+          "error",
+          "id",
+          "items",
+          "itemsView",
+          "rootTurnId",
+          "startedAt",
+          "status"
+        ]
+      },
+      "loaded_after_count": 0,
+      "loaded_set_unchanged": true
+    }
+  ],
+  "schema_sha256": {
+    "v2/ThreadListParams.json": "5daf371b2852c409d4405c95f79cddb2d92a1ee89da808b2c5112ef16a57432c",
+    "v2/ThreadReadResponse.json": "d8b6934897c959f589fdf33be4f750a81f46f075df77bedcaaa92e15ad80a2b1"
+  }
+}

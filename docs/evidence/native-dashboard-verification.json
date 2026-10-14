@@ -1,0 +1,8 @@
+{
+  "initial_dashboard_started_in_iterm": true,
+  "initial_q_failure": "Textual internal _closing attribute collision",
+  "fix": "application flag renamed _board_closing",
+  "automated_quit_regression_passed": true,
+  "native_quit_after_fix_recheck": "incomplete",
+  "reason": "iTerm2 new tab/window actions became nonresponsive during further GUI QA; getters still respond. Running user sessions were not restarted."
+}
