@@ -8,9 +8,11 @@
 
 [빠른 시작](#빠른-시작) · [계정 설정](#계정-설정) · [키보드 조작](#키보드-조작) · [작업공간 탐색](#작업공간-탐색)
 
-![Cboard: 현재 작업공간, 계정별 세션 목록, 마지막 요청과 답변](artifacts/screenshots/cboard-160x45.png)
+![Cboard 데모: 작업공간 이동, 요청과 답변 확인, 재개할 세션 선택](artifacts/screenshots/cboard-demo.gif)
 
-> 화면은 샘플 데이터입니다. 넓은 화면은 목록과 상세를 함께 보여주고, 100열 미만에서는 `d` / `Esc`로 전환합니다.
+> 샘플 데이터로 만든 약 17초 반복 데모입니다. 작업공간 이동 → 상세 확인 → 재개할 세션 선택 흐름을 보여줍니다. [정지 화면 보기](artifacts/screenshots/cboard-160x45.png).
+
+넓은 화면은 목록과 상세를 함께 보여주고, 100열 미만에서는 `d` / `Esc`로 전환합니다.
 
 ## 무엇을 할 수 있나요?
 
@@ -183,6 +185,8 @@ Cboard는 기존 계정별 Codex 서버에서 목록·상태·본문을 읽습�
 .venv/bin/python scripts/visual_qa.py
 .venv/bin/python scripts/benchmark.py --output /tmp/cboard-performance.json
 ```
+
+README GIF를 다시 만들려면 `brew install ffmpeg librsvg` 후 `.venv/bin/python scripts/demo_gif.py`를 실행합니다. 실제 계정 설정·세션·터미널을 사용하지 않고 샘플 데이터로 화면을 생성합니다. 이 도구들은 GIF 제작용이며 Cboard 실행에는 필요하지 않습니다.
 
 현재 **134개 자동 테스트 통과**. 5계정·2,000행 합성 데이터의 변경 없는 반복 갱신 중앙값은 최적화 전 약 303ms에서 약 22ms로 줄었습니다. 이는 headless UI 5회 측정이며 전체 사용자 체감 속도나 메모리 감소율을 보장하는 수치는 아닙니다.
 
