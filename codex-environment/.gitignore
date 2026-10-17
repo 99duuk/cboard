@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.DS_Store
+dist/
+.venv/
+local.toml
+
+accounts.toml
+config/accounts/*.toml
+config/default.json

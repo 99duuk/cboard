@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+import sys
+from pathlib import Path
+if sys.version_info < (3, 11):
+    raise SystemExit('cenv requires Python 3.11 or newer')
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from codex_env.cli import main
+raise SystemExit(main(['use'] + sys.argv[1:]))

@@ -206,3 +206,26 @@ README GIF를 다시 만들려면 `brew install ffmpeg librsvg` 후 `.venv/bin/p
 - [실행 검증과 성능 측정](docs/VERIFICATION.md)
 
 가상환경·인증 파일·실제 세션 기록·로컬 설정과 개인 작업공간 집계 원자료는 Git에 포함하지 않습니다. 화면 자료는 샘플 데이터로 생성합니다.
+
+## 계정 관리자 통합
+
+- 계정 등록·선택·사용량·공통 환경 관리 소스: [`codex-environment/`](codex-environment/README.md)
+- 저장소 구성: `src/cboard/`의 세션 보드 및 `codex-environment/`의 독립 계정 관리자
+- 기본 관리자 구성: 등록 계정 0개, 개인 인증·공통 스킬·설정 제외
+- 현재 운영 지원: macOS·zsh, Windows/Linux 이식의 G0 선행 검증 진행 중
+- 두 도구의 계정 설정 자동 동기화: 현재 미지원, Cboard `codex_home`과 관리자 계정 홈의 동일 경로 지정 필요
+- 기존 Mac 설치의 자동 이전 없음, 새 설치 시 아래 관리자 설치 명령 사용
+
+```sh
+./codex-environment/bin/cenv install --dry-run
+./codex-environment/bin/cenv install
+# 새 터미널에서 실행
+cnew personal
+clist
+```
+
+- 기존 계정 홈 재사용: `cenv account import personal --home ~/.codex-existing`
+- Cboard 연결: 위 계정 홈을 `~/.config/cboard/config.toml`의 `codex_home`으로 지정
+- 각 모듈의 설치·테스트·의존성 경계 유지, Cboard 설치만으로 관리자 설정 변경 없음
+- 크로스 플랫폼 명세: [SPEC-CROSS-PLATFORM.md](codex-environment/SPEC-CROSS-PLATFORM.md)
+- G0 구현·검증 상태: [G0-RESULTS.md](codex-environment/docs/G0-RESULTS.md)
