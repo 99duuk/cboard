@@ -86,6 +86,8 @@ def register(args, importing=False):
     defaults_path = core.ROOT/'config/defaults.toml'
     defaults_before = fingerprint(defaults_path)
     seed_defaults = core.read_toml(defaults_path) or {'approval_policy': 'on-request', 'sandbox_mode': 'workspace-write', 'approvals_reviewer': 'user'}
+    if os.name == 'nt' and not importing:
+        seed_defaults.setdefault('cli_auth_credentials_store', 'file')
     defaults = dict(seed_defaults)
     native = native_home/'config.toml'
     native_before = fingerprint(native)
@@ -116,13 +118,17 @@ def register(args, importing=False):
         raise RuntimeError('native account changed during import; retry')
     if importing and native.exists() and not any(c.path == native for c in changes):
         changes.append(Change(native, content=native.read_bytes(), mode=native.stat().st_mode & 0o777, expected=native_before))
-    for destination, target in asset_links(core.ROOT, Path.home(), new):
-        if importing and destination.is_relative_to(native_home) and os.path.lexists(destination):
-            if not destination.is_symlink() or destination.resolve() != target.resolve():
-                raise ValueError('existing import asset conflict; preserve/move before import: '+str(destination))
-        changes.append(Change(destination, link=target, expected=fingerprint(destination)))
-    shell = core.ROOT/'shell/accounts.zsh'
-    changes.append(Change(shell, content=core.shell_text(new, core.resolve_cli()).encode(), mode=0o644, expected=fingerprint(shell)))
+    links = asset_links(core.ROOT, Path.home(), new)
+    if os.name == 'nt':
+        from .windows import assets_changes, shell_changes
+        changes += assets_changes(links)+shell_changes(new)
+    else:
+        for destination, target in links:
+            if importing and destination.is_relative_to(native_home) and os.path.lexists(destination):
+                if not destination.is_symlink() or destination.resolve() != target.resolve():
+                    raise ValueError('existing import asset conflict; preserve/move before import: '+str(destination))
+            changes.append(Change(destination, link=target, expected=fingerprint(destination)))
+        changes += core.shell_changes(new)
     result = Transaction(core.state_dir()).apply(guard_sources(changes, snapshot), dry_run=args.dry_run)
     from .tools import install_tools
     if args.dry_run:
@@ -167,8 +173,11 @@ def remove(args):
     record = {'account': account, 'settings': source.read_text() if source.exists() else '', 'native_home_preserved': str(home)}
     changes = [guarded_registry(remaining, before), Change(archive, content=json_bytes(record), expected=fingerprint(archive)),
                Change(source, remove=True, expected=source_before)]
-    shell = core.ROOT/'shell/accounts.zsh'
-    changes.append(Change(shell, content=core.shell_text(remaining, core.resolve_cli()).encode(), mode=0o644, expected=fingerprint(shell)))
+    if os.name == 'nt':
+        from .windows import shell_changes
+        changes += shell_changes(remaining)
+    else:
+        changes += core.shell_changes(remaining)
     if default_value.get('account') == account['id']:
         changes.append(Change(default, content=json_bytes({'account': None}), expected=default_before))
     else:

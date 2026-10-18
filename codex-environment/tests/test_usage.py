@@ -44,6 +44,18 @@ class UsageTests(unittest.TestCase):
         self.assertEqual(item["limits"]["primary"]["usedPercent"], 25)
         self.assertEqual(item["resetCredits"]["availableCount"], 3)
 
+    def test_fragmented_utf8_and_oversized_response_cleanup(self):
+        self.server("sys.stdin.readline()\n"
+                    "value=json.dumps({'id':0,'result':{'text':'한글'}},ensure_ascii=False).encode()\n"
+                    "for byte in value+b'\\n':\n os.write(1,bytes([byte]))\n"
+                    "sys.stdin.readline();sys.stdin.readline()\n"
+                    "print(json.dumps({'id':1,'result':{'rateLimits':{'planType':'plus'}}}),flush=True)\n"
+                    "time.sleep(30)\n")
+        self.assertNotIn('error', usage.fetch_account(self.account))
+        self.server("sys.stdin.readline()\nos.write(1,b'x'*4200000)\ntime.sleep(30)\n")
+        self.assertIn('4 MiB', usage.fetch_account(self.account)['error'])
+        self.assertFalse(any(thread.name == 'cusage-pipe' for thread in threading.enumerate()))
+
     def test_legacy_schema_and_null_fields(self):
         self.server("sys.stdin.readline()\nprint(json.dumps({'id':0, 'result':{}}),flush=True)\n"
                     "sys.stdin.readline()\nsys.stdin.readline()\n"

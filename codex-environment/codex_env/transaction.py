@@ -1,18 +1,96 @@
-"""Private, journaled replacements with drift-aware recovery (macOS/POSIX)."""
+"""Private, journaled replacements with drift-aware recovery."""
 from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
 import errno
-import fcntl
+import ctypes
+import csv
+import base64
+from functools import lru_cache
 import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
 import stat
+import subprocess
+import sys
 import tempfile
 import uuid
+
+WINDOWS = sys.platform == 'win32'
+if WINDOWS:
+    import msvcrt
+else:
+    import fcntl
+
+
+@lru_cache(maxsize=1)
+def _windows_sid():
+    result = subprocess.run([str(Path(os.environ['SystemRoot']) / 'System32/whoami.exe'),
+                             '/user', '/fo', 'csv', '/nh'],
+                            capture_output=True, text=True, errors='replace', check=True)
+    sid = next(csv.reader(result.stdout.splitlines()))[-1]
+    if not sid.startswith('S-1-') or any(c not in 'S-0123456789' for c in sid):
+        raise RuntimeError('Unable to identify Windows user for private ACL')
+    return sid
+
+
+def _private(path):
+    if not WINDOWS:
+        path.chmod(0o700 if path.is_dir() else 0o600)
+        return
+    from ctypes import wintypes
+    api = ctypes.WinDLL('advapi32', use_last_error=True)
+    api.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [
+        wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p]
+    api.ConvertStringSecurityDescriptorToSecurityDescriptorW.restype = wintypes.BOOL
+    api.SetFileSecurityW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_void_p]
+    api.SetFileSecurityW.restype = wintypes.BOOL
+    descriptor = ctypes.c_void_p()
+    inheritance = 'OICI' if path.is_dir() else ''
+    sddl = f'D:P(A;{inheritance};FA;;;{_windows_sid()})'
+    if not api.ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            sddl, 1, ctypes.byref(descriptor), None):
+        raise ctypes.WinError(ctypes.get_last_error())
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.LocalFree.argtypes = [ctypes.c_void_p]
+    kernel.LocalFree.restype = ctypes.c_void_p
+    try:
+        if not api.SetFileSecurityW(str(path), 0x80000004, descriptor):
+            raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        kernel.LocalFree(descriptor)
+
+
+def _file_mode(mode):
+    return (0o666 if mode & 0o200 else 0o444) if WINDOWS else mode
+
+
+def _file_acl(path, saved=None):
+    from ctypes import wintypes
+    api = ctypes.WinDLL('advapi32', use_last_error=True)
+    if saved is None:
+        api.GetFileSecurityW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD,
+                                        ctypes.c_void_p, wintypes.DWORD,
+                                        ctypes.POINTER(wintypes.DWORD)]
+        api.GetFileSecurityW.restype = wintypes.BOOL
+        size = wintypes.DWORD()
+        api.GetFileSecurityW(str(path), 4, None, 0, ctypes.byref(size))
+        if not size.value:
+            raise ctypes.WinError(ctypes.get_last_error())
+        descriptor = ctypes.create_string_buffer(size.value)
+        if not api.GetFileSecurityW(str(path), 4, descriptor, size.value, ctypes.byref(size)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return base64.b64encode(descriptor.raw).decode('ascii')
+    descriptor = ctypes.create_string_buffer(base64.b64decode(saved, validate=True))
+    protected = int.from_bytes(descriptor.raw[2:4], 'little') & 0x1000
+    api.SetFileSecurityW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_void_p]
+    api.SetFileSecurityW.restype = wintypes.BOOL
+    if not api.SetFileSecurityW(str(path), 4 | (0x80000000 if protected else 0x20000000),
+                                descriptor):
+        raise ctypes.WinError(ctypes.get_last_error())
 
 
 @dataclass
@@ -47,6 +125,9 @@ def fingerprint(path: Path) -> dict:
 
 
 def _sync_directory(path):
+    # Windows directories cannot be opened with the POSIX fsync interface.
+    if WINDOWS:
+        return
     fd = os.open(path, os.O_RDONLY)
     try:
         os.fsync(fd)
@@ -110,17 +191,31 @@ class Transaction:
         if self.state_dir.is_symlink():
             raise ValueError(f"State directory must not be a symlink: {self.state_dir}")
         self.state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.state_dir.chmod(0o700)
-        with (self.state_dir / "lock").open("a") as stream:
-            os.chmod(stream.name, 0o600)
+        _private(self.state_dir)
+        with (self.state_dir / "lock").open("a+b") as stream:
+            _private(Path(stream.name))
+            if WINDOWS:
+                if os.fstat(stream.fileno()).st_size == 0:
+                    stream.write(b'\0')
+                    stream.flush()
+                stream.seek(0)
             try:
-                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
+                if WINDOWS:
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as exc:
+                if exc.errno not in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                    raise
                 raise RuntimeError("Another environment transaction is running") from None
             try:
                 yield
             finally:
-                fcntl.flock(stream, fcntl.LOCK_UN)
+                if WINDOWS:
+                    stream.seek(0)
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(stream, fcntl.LOCK_UN)
 
     def pending(self) -> list[str]:
         if not self.state_dir.exists():
@@ -141,9 +236,11 @@ class Transaction:
         if (change.content is None) == (change.link is None):
             raise ValueError("Each change needs exactly one of content or link")
         if change.link is not None:
+            if WINDOWS:
+                raise ValueError('Windows managed assets require materialized file content')
             return {"kind": "link", "target": str(change.link)}
         return {"kind": "file", "sha256": hashlib.sha256(change.content).hexdigest(),
-                "mode": change.mode}
+                "mode": _file_mode(change.mode)}
 
     def apply(self, changes: list[Change], dry_run=False) -> str | None:
         if dry_run:
@@ -167,6 +264,8 @@ class Transaction:
                 raise ValueError(f"Overlapping destination: {path}")
             seen.append(path)
             before = fingerprint(path)
+            if WINDOWS and before['kind'] in {'directory', 'link'}:
+                raise ValueError(f'Windows managed destinations must be regular files: {path}')
             if change.expected is not None and before != change.expected:
                 raise RuntimeError(f"Changed since planning: {path}")
             after = self._desired(change)
@@ -204,6 +303,8 @@ class Transaction:
                          "backup": str(index), "started": False, "restored": False,
                          "temp": str(path.parent / (".cenv-" + uuid.uuid4().hex)),
                          "stash": str(path.parent / (".cenv-original-" + uuid.uuid4().hex))}
+                if WINDOWS and before['kind'] == 'file':
+                    entry['before_acl'] = _file_acl(path)
                 journal["entries"].append(entry)
                 _write_json(journal_path, journal)
             journal["status"] = "applying"
@@ -212,6 +313,8 @@ class Transaction:
                 path = Path(parent["path"])
                 try:
                     path.mkdir(mode=0o700)
+                    if WINDOWS:
+                        _private(path)
                 except FileExistsError:
                     raise RuntimeError(f"Parent appeared since planning: {path}") from None
                 info = path.lstat()
@@ -233,8 +336,12 @@ class Transaction:
                         with os.fdopen(fd, "wb") as stream:
                             stream.write(change.content)
                             stream.flush()
-                            os.fchmod(stream.fileno(), change.mode)
+                            if not WINDOWS:
+                                os.fchmod(stream.fileno(), change.mode)
                             os.fsync(stream.fileno())
+                        if WINDOWS:
+                            temp.chmod(change.mode)
+                            _private(temp)
                     entry["started"] = True
                     _write_json(journal_path, journal)
                     if fingerprint(path) != before:
@@ -337,6 +444,8 @@ class Transaction:
                     if not os.path.lexists(temp):
                         _private_copy(directory / entry["backup"], temp)
                         _restore_modes(temp, entry["before"])
+                        if WINDOWS and entry.get('before_acl'):
+                            _file_acl(temp, entry['before_acl'])
                     if fingerprint(temp) != entry["before"]:
                         raise RuntimeError(f"Backup or recovery stage changed: {path}")
                 if fingerprint(path) != current:

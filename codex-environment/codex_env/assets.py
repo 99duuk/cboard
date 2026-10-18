@@ -194,7 +194,7 @@ def asset_links(root: Path, home: Path, accounts) -> list[tuple[Path, Path]]:
     for group in ('skills', 'rules'):
         directory = canonical / group
         if not toolkit and directory.exists():
-            links.extend((home / '.agents' / group / p.name, p) for p in sorted(directory.iterdir()))
+            links.extend((home / '.agents' / group / p.name, p) for p in sorted(directory.iterdir()) if p.name != '.gitkeep')
     values = accounts.values() if isinstance(accounts, dict) else accounts
     for account in values:
         value = account.get('home', account.get('path')) if isinstance(account, dict) else getattr(account, 'home', account)
@@ -204,7 +204,7 @@ def asset_links(root: Path, home: Path, accounts) -> list[tuple[Path, Path]]:
             account_home = home / account_home
         for name in ('AGENTS.md', 'skills', 'rules'):
             source = canonical / name
-            supplied = not toolkit and (source.is_file() or (source.is_dir() and any(source.iterdir())))
+            supplied = not toolkit and (source.is_file() or (source.is_dir() and any(p.name != '.gitkeep' for p in source.iterdir())))
             if supplied or (home / '.agents' / name).exists():
                 links.append((account_home / name, home / '.agents' / name))
         roles = canonical / 'agents'

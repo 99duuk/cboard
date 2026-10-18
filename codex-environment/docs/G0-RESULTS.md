@@ -1,3 +1,21 @@
+# Windows 명령 설치 후속 구현
+
+- 현재 산출물: `dist/cboard-windows-install-r2.zip`
+- 기존 preview 묶음과의 차이: 진단 전용 대신 실제 명령·PowerShell 프로필·바로가기 설치
+- 구현 범위: Windows 네이티브 CLI 탐색·파일 잠금/ACL·저널 롤백·파이프 리더·PowerShell 함수·파일 복사 기반 공통 자산
+- 자동 계정 추가·로그인 없음, 기존 등록부·인증·네이티브 기록 보존
+- Mac 회귀 결과: 관리자 131개·보드 146개 통과
+- 실제 PowerShell 7.6.7의 구문·도움말·빈 계정 usage/list·특수문자 argv 검사 통과, 실행 호스트 Mac
+- Windows 전용 현장 검사: 설치기의 파일 적용·롤백·잠금 경합·파이프·명령 연결 검사
+- Windows 현장 검사 결과: 새 설치본 실행 전 미확보
+- 전체 G0 통과 및 제품 전체 Windows 지원의 선언 없음
+- 남은 한계: Cboard의 기존 세션 실시간 Unix 소켓 관찰, manager 강제 종료의 모든 자손 회수, 디렉터리 정전 내구성
+- 설치 안내: `../../scripts/windows/README.md`
+
+---
+
+## 초기 G0 기록
+
 # 크로스 플랫폼 구현 진행 상태
 
 - 기준 명세: `SPEC-CROSS-PLATFORM.md` v3.1

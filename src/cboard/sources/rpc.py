@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 import json
+import sys
 import time
 from pathlib import Path
 
@@ -76,6 +77,8 @@ class ReadOnlyRpc:
                 future.cancel()
 
     async def _connect(self):
+        if sys.platform == "win32":
+            raise RpcError("Windows의 실행 중 대화 연결은 아직 지원되지 않습니다. 계정 관리는 cnew · clist · cusage를 사용하세요")
         async with self._connect_lock:
             if self._ws is not None:
                 return

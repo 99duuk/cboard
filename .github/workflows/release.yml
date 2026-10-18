@@ -1,0 +1,63 @@
+name: Release runtime archives
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish downloads after Linux installation check
+        type: boolean
+        default: false
+      tag:
+        description: Existing version tag (required for publication)
+        required: false
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/build_release.py --require-clean
+      - name: Check Linux installation without accounts
+        shell: bash
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/cboard-home"
+          mkdir -p "$HOME" "$RUNNER_TEMP/cboard-extract"
+          tar -xzf dist/cboard-linux.tar.gz -C "$RUNNER_TEMP/cboard-extract"
+          sh "$RUNNER_TEMP/cboard-extract/cboard-linux/scripts/install-linux.sh"
+          bash --noprofile -c 'set -e; . "$HOME/.bashrc"; chelp; cusage; clist; cboard --help'
+          "$HOME/.local/share/cboard/venv/bin/python" -I - <<'PY'
+          from pathlib import Path
+          import subprocess, sys, tomllib
+          manager = Path.home()/'.local/share/cboard/source/codex-environment'
+          assert tomllib.loads((manager/'accounts.toml').read_text())['accounts'] == []
+          sys.path.insert(0, str(manager))
+          from codex_env.core import resolve_cli
+          subprocess.run([resolve_cli(), '--version'], check=True)
+          assert not list(manager.rglob('auth.json'))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-archives
+          path: |
+            dist/cboard-windows.zip
+            dist/cboard-linux.tar.gz
+            dist/SHA256SUMS
+      - name: Publish release downloads
+        if: github.event_name == 'push' || inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          case "$RELEASE_TAG" in v*) ;; *) echo 'A v* tag is required'; exit 1 ;; esac
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --title "Cboard $RELEASE_TAG" --generate-notes
+          fi
+          gh release upload "$RELEASE_TAG" dist/cboard-windows.zip dist/cboard-linux.tar.gz dist/SHA256SUMS --clobber

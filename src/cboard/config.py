@@ -4,6 +4,7 @@ import os
 import math
 import re
 import shutil
+import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -28,15 +29,24 @@ class Config:
 
 
 def config_path() -> Path:
-    return Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "cboard/config.toml"
+    base = Path(os.environ.get("APPDATA", Path.home() / "AppData/Roaming")) if sys.platform == "win32" else Path.home() / ".config"
+    return Path(os.environ.get("XDG_CONFIG_HOME", base)) / "cboard/config.toml"
 
 
 def load_config(path: Path | None = None) -> Config:
     path = path or config_path()
-    data = tomllib.loads(path.read_text()) if path.exists() else {}
+    data = tomllib.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     if data.get("schema_version", 1) != 1:
         raise ValueError("Unsupported config schema_version")
-    entries = data.get("accounts", [{"id": name, "codex_home": str(Path.home() / directory)} for name, directory in DEFAULT_ACCOUNTS])
+    defaults = [] if sys.platform != "darwin" else [{"id": name, "codex_home": str(Path.home() / directory)} for name, directory in DEFAULT_ACCOUNTS]
+    registry = os.environ.get("CENV_REGISTRY")
+    if registry and "accounts" not in data:
+        shared = tomllib.loads(Path(registry).read_text(encoding="utf-8-sig"))
+        if shared.get("version") != 1:
+            raise ValueError("Unsupported account manager registry version")
+        defaults = [{"id": a["id"], "label": a.get("label", a["id"]), "codex_home": a["home"]}
+                    for a in shared.get("accounts", [])]
+    entries = data.get("accounts", defaults)
     accounts = []
     ids, homes, sockets = set(), set(), set()
     for entry in entries:
@@ -57,11 +67,20 @@ def load_config(path: Path | None = None) -> Config:
         if background is not None and (not isinstance(background, str) or not re.fullmatch(r"[0-9a-fA-F]{6}", background)):
             raise ValueError(f"iterm_background must be six hex digits: {account_id}")
         accounts.append(Account(account_id, str(entry.get("label", account_id.upper())), home, socket, profile, background.lower() if background is not None else None))
-    if not accounts:
-        raise ValueError("No enabled accounts")
-    executable = Path(data.get("codex_executable") or shutil.which("codex") or "/opt/homebrew/bin/codex").expanduser().resolve()
-    state_dir = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "cboard"
-    cache_dir = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "cboard"
+    managed_cli = None
+    if registry:
+        local = Path.home()/'.config/codex-environment/local.toml'
+        if local.exists():
+            managed_cli = tomllib.loads(local.read_text(encoding='utf-8-sig')).get('cli')
+    executable = Path(data.get("codex_executable") or os.environ.get("CENV_CLI") or managed_cli or shutil.which("codex") or ("codex.exe" if sys.platform == "win32" else "/opt/homebrew/bin/codex")).expanduser().resolve()
+    local = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local"))
+    state_base = local if sys.platform == "win32" else Path.home() / ".local/share"
+    cache_base = local if sys.platform == "win32" else Path.home() / ".cache"
+    state_dir = Path(os.environ.get("XDG_DATA_HOME", state_base)) / "cboard"
+    cache_dir = Path(os.environ.get("XDG_CACHE_HOME", cache_base)) / "cboard"
+    if sys.platform == "win32":
+        state_dir /= "state"
+        cache_dir /= "cache"
     intervals = [float(data.get(k, default)) for k, default in [("loaded_interval", 3), ("list_interval", 15), ("timeout", 5)]]
     if any(not math.isfinite(n) or n < 0.1 or n > 3600 for n in intervals):
         raise ValueError("Intervals and timeout must be between 0.1 and 3600 seconds")

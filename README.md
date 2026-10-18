@@ -4,7 +4,7 @@
 
 프로젝트와 슬롯을 오가며 작업할 때, 어디서 무엇을 하던 중이었는지 다시 찾기 위한 도구입니다. 계정별 세션 목록을 모으고 마지막 요청·답변을 보여주며, 선택한 세션을 원래 계정과 폴더에서 재개합니다.
 
-**macOS · iTerm2 · Python 3.11+** | 현재 버전 `0.1.0`
+**Windows · Linux · macOS / Python 3.11+** | 현재 버전 `0.2.0`
 
 [빠른 시작](#빠른-시작) · [계정 설정](#계정-설정) · [키보드 조작](#키보드-조작) · [작업공간 탐색](#작업공간-탐색)
 
@@ -26,6 +26,42 @@
 | 목록 정리하기 | 숨김, 이름 변경, 확인 후 원본 세션 삭제 |
 
 ## 빠른 시작
+
+### Windows
+
+1. [Windows 설치 ZIP 다운로드](https://github.com/99duuk/cboard/releases/latest/download/cboard-windows.zip)
+2. 압축 해제 후 `START-WINDOWS.cmd` 더블클릭
+3. 자동으로 열린 PowerShell에서 `chelp`·`cusage` 실행
+
+- 관리자 권한 불필요, 계정 자동 등록·로그인 없음
+- Python·PowerShell·Codex 기존 설치본 우선 재사용, 없는 필수 항목만 준비
+- 계정 0개 상태의 정상 안내, 사용자 선택 이름으로 `cnew <이름>` 등록
+
+### Linux
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/99duuk/cboard/main/scripts/install-linux.sh | sh
+```
+
+- Bash·Zsh 셸 연결, 사용자 범위 설치 및 대화형 실행 시 준비된 셸 자동 열기
+- Python 3.11 이상·venv·pip·curl 필요, 배포판 Python/venv 패키지의 사용자 사전 준비
+- Git clone·Node·npm 불필요, 기존 Codex 우선 재사용 및 부재 시 공식 고정 버전 준비
+- 다운로드 묶음의 SHA-256 검증, 계정 자동 추가·로그인 없음
+- [Linux 파일 직접 다운로드](https://github.com/99duuk/cboard/releases/latest/download/cboard-linux.tar.gz) · [다운로드 체크섬](https://github.com/99duuk/cboard/releases/latest/download/SHA256SUMS)
+
+### 배포 범위
+
+| 항목 | 구성 |
+| --- | --- |
+| 계정 명령 | `cnew`·`clogin`·`clist`·`cuse`·`cdefault`·`crun`·`cusage`·`cdel`·`chelp` |
+| 초기 등록부 | 0개, 개인 계정·인증·기록 제외 |
+| 설치 의존성 | 실행용 고정 의존성만 포함, pytest·테스트 플러그인 제외 |
+| 다운로드 | 런타임 소스만 포함, 스크린샷·테스트·상세 문서·가상환경 제외 |
+| 외부 바이너리 | 다운로드 묶음에 미포함, 필요한 경우만 별도 다운로드·무결성 검증 |
+| 세션 보드 | TUI 시작 및 계정 관리자 등록부 연결 |
+| 현재 한계 | Windows 기존 세션 실시간 Unix 소켓 관찰 미지원, Linux 새 GUI 탭 재개 대신 명령 복사 |
+
+### macOS 보드 단독 설치
 
 먼저 **Codex와 iTerm2가 설치되어 있고**, 사용할 계정의 기존 Codex 서버에 연결할 수 있어야 합니다. Cboard는 서버를 자동 시작하지 않습니다.
 
@@ -54,7 +90,9 @@ cboard
 cboard init
 ```
 
-기본 계정은 `CODEX`, `CWORK`, `CCOMM`, `CSAY`, `CRIM`이며 각각 `~/.codex`, `~/.codex-work`, `~/.codex-comm`, `~/.codex-say`, `~/.codex-rim`을 사용합니다. 사용하지 않는 계정 블록은 지우거나 `enabled = false`로 설정하세요. 계정 수는 고정되어 있지 않습니다.
+- Windows·Linux 통합 설치: 계정 관리자 등록부 직접 사용, 초기 계정 0개
+- Mac 보드 단독 설치의 이전 기본 목록: `CODEX`·`CWORK`·`CCOMM`·`CSAY`·`CRIM`
+- 별도 `config.toml`의 명시적 `accounts` 설정 우선, 계정 수 제한 없음
 
 아래는 두 계정만 사용하는 예시입니다.
 
@@ -213,7 +251,7 @@ README GIF를 다시 만들려면 `brew install ffmpeg librsvg` 후 `.venv/bin/p
 - 저장소 구성: `src/cboard/`의 세션 보드 및 `codex-environment/`의 독립 계정 관리자
 - 기본 관리자 구성: 등록 계정 0개, 개인 인증·공통 스킬·설정 제외
 - 현재 운영 지원: macOS·zsh, Windows/Linux 이식의 G0 선행 검증 진행 중
-- 두 도구의 계정 설정 자동 동기화: 현재 미지원, Cboard `codex_home`과 관리자 계정 홈의 동일 경로 지정 필요
+- Windows 설치본의 `cboard` 명령: 계정 관리자 등록부의 직접 조회, 별도 Cboard `accounts` 설정 존재 시 해당 설정 우선
 - 기존 Mac 설치의 자동 이전 없음, 새 설치 시 아래 관리자 설치 명령 사용
 
 ```sh
@@ -225,7 +263,16 @@ clist
 ```
 
 - 기존 계정 홈 재사용: `cenv account import personal --home ~/.codex-existing`
-- Cboard 연결: 위 계정 홈을 `~/.config/cboard/config.toml`의 `codex_home`으로 지정
+- Mac Cboard 연결: 위 계정 홈을 `~/.config/cboard/config.toml`의 `codex_home`으로 지정
 - 각 모듈의 설치·테스트·의존성 경계 유지, Cboard 설치만으로 관리자 설정 변경 없음
 - 크로스 플랫폼 명세: [SPEC-CROSS-PLATFORM.md](codex-environment/SPEC-CROSS-PLATFORM.md)
 - G0 구현·검증 상태: [G0-RESULTS.md](codex-environment/docs/G0-RESULTS.md)
+
+## Windows 명령 설치
+
+- 전달 파일: `dist/cboard-windows-install-r2.zip`
+- 실행: 압축 해제 후 `START-WINDOWS.cmd` 더블클릭
+- 설치 결과: 새 PowerShell의 `cusage`·`cnew`·`cdel` 등 계정 관리 명령 및 Cboard 시작 명령
+- 자동 계정 등록·로그인 없음
+- Windows의 기존 세션 실시간 관찰: Unix 소켓 전송 의존에 따른 미지원
+- 상세 설치·검증 범위: [Windows 설치 안내](scripts/windows/README.md)

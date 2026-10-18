@@ -1,0 +1,22 @@
+{
+  "x64": {
+    "version": "0.163.0-win32-x64",
+    "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.163.0-win32-x64.tgz",
+    "integrity": "sha512-QQGQ/q9dCJ5C5jqhgFrwycpWG3szIyFNThMiKl6hYtu6N/eM3Qd7StesgnCFAfzVED8IkE3N3oH71szzcludqw=="
+  },
+  "arm64": {
+    "version": "0.163.0-win32-arm64",
+    "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.163.0-win32-arm64.tgz",
+    "integrity": "sha512-QnLn3gR2dExcdTThE/HAo5BrUq0/C8zDGQ0UZL3hNzfqt9ZklT6jGTyt8JhDyNZX4uSB4HhcJtbcOWucZGC0VQ=="
+  },
+  "linux-x64": {
+    "version": "0.163.0-linux-x64",
+    "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.163.0-linux-x64.tgz",
+    "integrity": "sha512-uwRaOsrYogLQhcxAM/GoeWrw0QIWEMRo7c9gM8sKAviVkZQHlu9kRLJ5PkufbV+ABGjyZgIwiFdJ0LCJ0N6e8w=="
+  },
+  "linux-arm64": {
+    "version": "0.163.0-linux-arm64",
+    "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.163.0-linux-arm64.tgz",
+    "integrity": "sha512-IH2/R+4OarjGvsAf1ll3fdyLwrPgYLl3uzp6u9CyD9sj2Lw+ViDSe3QBZVHdcHJs0eIiZFg6Wprcuy4CRZaUGw=="
+  }
+}

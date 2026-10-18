@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -391,7 +392,7 @@ class CboardApp(App):
         left_width = table.scrollable_content_region.width
         if not left_width:
             left_width = self.size.width - 4 if self.size.width < 100 else int((self.size.width - 2) * 0.58) - 2
-        account_width = max(7, min(15, max(len(a.label) for a in self.config.accounts)))
+        account_width = max(7, min(15, max((len(a.label) for a in self.config.accounts), default=7)))
         widths = (max(1, left_width - account_width - 18 - 9 - 8), account_width, 18, 9)
         ordered_groups = sorted(groups.items(), key=lambda pair: (-max(t.updated_at for t in pair[1]), pair[0]))
         signature = (widths, self.grouping, self.workspace_filter, tuple(
@@ -448,7 +449,7 @@ class CboardApp(App):
                 health.append(f"{account.label}: 불러온 {len(snapshot.tasks)}개 · 조회 중")
             if account.id in self.board.errors:
                 health.append(f"{account.label}: {self.board.errors[account.id]}")
-        health_text = " / ".join(health) or "연결 정상 · 계정별 원본 상태를 조회합니다"
+        health_text = " / ".join(health) or ("연결 정상 · 계정별 원본 상태를 조회합니다" if self.config.accounts else "등록된 Cboard 계정 없음 · 계정 관리: cnew NAME / clist / cusage · 보드 연결은 config.toml의 accounts 설정 필요")
         if health_text != self._health_text:
             self.query_one("#health", Static).update(Text(health_text, style="#8491a8"))
             self._health_text = health_text
@@ -733,10 +734,13 @@ class CboardApp(App):
                 except Exception as exc:
                     failures.append(f"{key}: {plain(exc)}")
             if action == "copy" and commands:
-                proc = await asyncio.create_subprocess_exec("/usr/bin/pbcopy", stdin=asyncio.subprocess.PIPE)
-                await proc.communicate(("\n".join(commands) + "\n").encode())
-                if proc.returncode:
-                    raise RuntimeError("클립보드에 복사하지 못했습니다")
+                if sys.platform == "win32":
+                    self.copy_to_clipboard("\n".join(commands) + "\n")
+                else:
+                    proc = await asyncio.create_subprocess_exec("/usr/bin/pbcopy", stdin=asyncio.subprocess.PIPE)
+                    await proc.communicate(("\n".join(commands) + "\n").encode())
+                    if proc.returncode:
+                        raise RuntimeError("클립보드에 복사하지 못했습니다")
                 self.notify(f"재개 명령 {len(commands)}개 복사 완료")
             if failures:
                 self.notify("\n".join(failures), severity="error", timeout=15)

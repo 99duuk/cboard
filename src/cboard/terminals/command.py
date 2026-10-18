@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import os
 import shlex
+import sys
 from dataclasses import dataclass
 from typing import Protocol
 
 from ..config import Config
 from ..models import Task, ThreadKey
+
+
+def powershell_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
 
 
 @dataclass(frozen=True)
@@ -20,6 +25,8 @@ class ResumeSpec:
 
     @property
     def command(self):
+        if sys.platform == "win32":
+            return f"$env:CODEX_HOME={powershell_literal(self.account_home)}; & " + " ".join(powershell_literal(value) for value in self.argv)
         return shlex.join(["env", f"CODEX_HOME={self.account_home}", *self.argv])
 
     def environment(self):

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import fcntl
 import shlex
 import subprocess
 import sys
 import threading
 from pathlib import Path
 
+from ..locking import file_lock
 from .command import ResumeSpec, TerminalUnavailable
 
 _STOPPED = "자동 열기가 중단됐습니다. 명령 복사를 사용하세요. iTerm2 상태를 확인한 뒤 Cboard를 다시 실행하세요."
@@ -78,8 +78,7 @@ class ItermLauncher:
         commands.extend([shlex.join(runner), "exec /bin/zsh -l"])
         command = shlex.join(["/bin/zsh", "-lc", "; ".join(commands)])
         # Serialize automation across conversations and Cboard processes.
-        with (lock_dir / "iterm.lock").open("a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
+        with file_lock(lock_dir / "iterm.lock"):
             try:
                 result = subprocess.run(
                     ["/usr/bin/osascript", "-e", _OPEN, command, spec.iterm_profile or ""],

@@ -15,7 +15,7 @@ from .renaming import CodexSessionRenamer
 from .services import Board
 from .state import StateError, StateStore
 from .terminals.command import TerminalUnavailable, resume_spec
-from .terminals.iterm import ItermLauncher
+from .terminals import terminal_launcher
 
 
 async def inspect_board(args, config):
@@ -32,6 +32,8 @@ async def inspect_board(args, config):
             if args.json:
                 print(json.dumps(result, ensure_ascii=False, indent=2))
             else:
+                if not config.accounts:
+                    print("등록된 Cboard 계정이 없습니다. 계정 추가: cnew NAME / 조회: clist · cusage. 보드 연결 설정: " + str(config_path()))
                 for task in tasks:
                     print(f"{task.key.encoded}\t{task.status.value}\t{task.title}\t{task.cwd}")
                 for account in result["accounts"]:
@@ -56,7 +58,7 @@ async def inspect_board(args, config):
             elif args.copy:
                 print(spec.command)
             else:
-                print(await ItermLauncher(config.state_dir, args.config).open(spec))
+                print(await terminal_launcher(config.state_dir, args.config).open(spec))
         return 0
     finally:
         await board.close()
@@ -88,9 +90,11 @@ def main():
                 raise ValueError(f"설정 파일이 이미 있습니다: {path}")
             path.parent.mkdir(parents=True, exist_ok=True)
             text = f'schema_version = 1\ncodex_executable = {json.dumps(str(config.executable))}\n'
+            if not config.accounts:
+                text += 'accounts = []\n'
             for account in config.accounts:
                 text += f'\n[[accounts]]\nid = {json.dumps(account.id)}\nlabel = {json.dumps(account.label)}\ncodex_home = {json.dumps(str(account.home))}\nenabled = true\n'
-            path.write_text(text)
+            path.write_text(text, encoding="utf-8")
             print(path)
         elif args.command == "doctor":
             from .sources.codex import CodexSource
@@ -108,7 +112,7 @@ def main():
             raise SystemExit(asyncio.run(inspect_board(args, config)))
         else:
             from .ui.app import CboardApp
-            CboardApp(config, launcher=ItermLauncher(config.state_dir, args.config), deleter=CodexSessionDeleter(config), renamer=CodexSessionRenamer(config)).run()
+            CboardApp(config, launcher=terminal_launcher(config.state_dir, args.config), deleter=CodexSessionDeleter(config), renamer=CodexSessionRenamer(config)).run()
     except (ValueError, OSError, StateError, StopIteration, TerminalUnavailable) as exc:
         parser.exit(1, f"cboard: {exc}\n")
     except KeyboardInterrupt:

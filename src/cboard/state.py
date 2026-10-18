@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import shutil
@@ -9,6 +8,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+from .locking import file_lock
 from .models import Snapshot, Task
 
 
@@ -20,7 +20,7 @@ def atomic_json(path: Path, data: dict):
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, name = tempfile.mkstemp(prefix=path.name + ".", suffix=".tmp", dir=path.parent)
     try:
-        with os.fdopen(fd, "w") as stream:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
             json.dump(data, stream, ensure_ascii=False, indent=2)
             stream.write("\n")
             stream.flush()
@@ -39,8 +39,7 @@ class StateStore:
     @contextmanager
     def _lock(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with (self.path.parent / "state.lock").open("a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
+        with file_lock(self.path.parent / "state.lock"):
             yield
 
     def _read(self):
@@ -48,7 +47,7 @@ class StateStore:
         if not self.path.exists():
             return default
         try:
-            data = json.loads(self.path.read_text())
+            data = json.loads(self.path.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
                 raise ValueError("state must be an object")
             if data.get("schema_version") != 1:
@@ -117,7 +116,7 @@ def save_snapshot(directory: Path, snapshot: Snapshot):
 
 def load_snapshot(directory: Path, account_id: str) -> Snapshot:
     try:
-        data = json.loads((directory / "accounts" / f"{account_id}.json").read_text())
+        data = json.loads((directory / "accounts" / f"{account_id}.json").read_text(encoding="utf-8"))
         if data["schema_version"] != 1 or data["account_id"] != account_id:
             raise ValueError("invalid snapshot")
         tasks = tuple(Task.from_json(t) for t in data["tasks"])

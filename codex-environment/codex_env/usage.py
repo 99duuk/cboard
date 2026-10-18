@@ -6,7 +6,7 @@ from datetime import datetime
 import json
 import os
 import re
-import select
+import queue
 import subprocess
 import sys
 import time
@@ -58,31 +58,77 @@ def send(proc, message):
     proc.stdin.flush()
 
 
+class PipeReader:
+    """Read anonymous pipes without select(), which only supports sockets on Windows."""
+    LIMIT = 4 * 1024 * 1024
+
+    def __init__(self, stream):
+        self.stream = stream
+        self.items = queue.Queue(maxsize=32)
+        self.stopped = threading.Event()
+        self.lock = threading.Lock()
+        self.buffered = 0
+        self.thread = threading.Thread(target=self._read, name="cusage-pipe", daemon=True)
+        self.thread.start()
+
+    def _put(self, kind, value, weight=0):
+        while not self.stopped.is_set():
+            try:
+                self.items.put((kind, value, weight), timeout=.05)
+                return
+            except queue.Full:
+                pass
+
+    def _read(self):
+        pending = bytearray()
+        try:
+            while not self.stopped.is_set():
+                chunk = os.read(self.stream.fileno(), 65536)
+                if not chunk:
+                    self._put('error', 'app-server stopped unexpectedly')
+                    return
+                with self.lock:
+                    overflow = self.buffered + len(chunk) > self.LIMIT
+                    if not overflow:
+                        self.buffered += len(chunk)
+                if overflow:
+                    self._put('error', 'app-server response exceeds 4 MiB')
+                    return
+                pending.extend(chunk)
+                while b'\n' in pending:
+                    line, _, tail = pending.partition(b'\n')
+                    pending = bytearray(tail)
+                    self._put('line', line, len(line) + 1)
+        except (OSError, ValueError):
+            self._put('error', 'app-server pipe closed')
+
+    def next(self, timeout):
+        kind, value, weight = self.items.get(timeout=timeout)
+        with self.lock:
+            self.buffered -= weight
+        if kind == 'error':
+            raise RuntimeError(value)
+        return value
+
+
 def receive(proc, request_id, deadline, run):
-    # Read raw bytes: TextIO buffering can hide a second response from select().
-    pending = getattr(proc, "_usage_pending", b"")
+    reader = proc._usage_reader
     while True:
         if run.stopped.is_set():
             raise RuntimeError("snapshot cancelled")
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError(f"no response within {TIMEOUT_SECONDS}s")
-        if b"\n" not in pending:
-            ready, _, _ = select.select([proc.stdout], [], [], min(remaining, 0.2))
-            if not ready:
-                continue
-            chunk = os.read(proc.stdout.fileno(), 65536)
-            if not chunk:
-                raise RuntimeError("app-server stopped unexpectedly")
-            pending += chunk
-            if len(pending) > 1048576:
-                raise RuntimeError("app-server response exceeds 1 MiB")
+        try:
+            line = reader.next(min(remaining, .2))
+        except queue.Empty:
             continue
-        line, pending = pending.split(b"\n", 1)
-        proc._usage_pending = pending
         if not line.strip():
             continue
-        message = json.loads(line)
+        try:
+            message = json.loads(line)
+        except (ValueError, UnicodeDecodeError, RecursionError) as exc:
+            raise RuntimeError('invalid app-server JSON') from exc
         if not isinstance(message, dict) or message.get("id") != request_id:
             continue
         if "error" in message:
@@ -116,6 +162,7 @@ def account_request(account, method, params=None, _run=None):
                 bufsize=0,
             )
             run.processes.add(proc)
+            proc._usage_reader = PipeReader(proc.stdout)
         send(proc, {
             "method": "initialize", "id": 0,
             "params": {"clientInfo": {
@@ -131,6 +178,9 @@ def account_request(account, method, params=None, _run=None):
         return receive(proc, 1, deadline, run)
     finally:
         if proc:
+            reader = getattr(proc, "_usage_reader", None)
+            if reader:
+                reader.stopped.set()
             if proc.poll() is None:
                 proc.terminate()
                 try:
@@ -141,6 +191,8 @@ def account_request(account, method, params=None, _run=None):
             else:
                 proc.wait()
             proc.stdin.close()
+            if reader:
+                reader.thread.join(timeout=1)
             proc.stdout.close()
             with run.lock:
                 run.processes.discard(proc)

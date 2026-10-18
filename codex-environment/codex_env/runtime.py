@@ -86,18 +86,20 @@ def run(name=None, args=()):
             print(f'\033]1337;SetProfile={profile}\a', end='', file=sys.stderr, flush=True)
         if color:
             print(f'\033]1337;SetColors=bg={color}\a', end='', file=sys.stderr, flush=True)
-    child = subprocess.Popen([core.resolve_cli(), *args], env=env)
+    windows = sys.platform == "win32"
+    options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if windows else {}
+    child = subprocess.Popen([core.resolve_cli(), *args], env=env, **options)
     previous = {}
     def forward(signum, frame):
         if child.poll() is None:
             child.send_signal(signum)
-    for signum in (signal.SIGTERM, signal.SIGHUP):
+    for signum in ((signal.SIGTERM,) if windows else (signal.SIGTERM, signal.SIGHUP)):
         previous[signum] = signal.signal(signum, forward)
     try:
         result = child.wait()
     except KeyboardInterrupt:
         if child.poll() is None:
-            child.send_signal(signal.SIGINT)
+            child.send_signal(signal.CTRL_BREAK_EVENT if windows else signal.SIGINT)
         try:
             child.wait(timeout=3)
         except subprocess.TimeoutExpired:

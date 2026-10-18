@@ -346,7 +346,7 @@ def doctor(online=False):
         auth = home/'auth.json'
         if not auth.is_file() and not online:
             failures.append(account['id']+': login required (or OS credential store; confirm with --online)')
-        elif auth.is_file() and auth.stat().st_mode & 0o077:
+        elif os.name != 'nt' and auth.is_file() and auth.stat().st_mode & 0o077:
             warnings.append(account['id']+': auth.json permissions allow group/other access; inspect chmod 600')
         for part in ['AGENTS.md','skills','rules']:
             canonical = core.ROOT/'assets'/part

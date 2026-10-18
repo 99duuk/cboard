@@ -4,7 +4,7 @@ project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 if [ ! -x "$project_dir/.venv/bin/python" ]; then
     python3 -m venv "$project_dir/.venv"
 fi
-"$project_dir/.venv/bin/python" -m pip install -r "$project_dir/requirements.lock"
+"$project_dir/.venv/bin/python" -m pip install -r "$project_dir/requirements-runtime.lock"
 "$project_dir/.venv/bin/python" -m pip install --no-deps -e "$project_dir"
 command_dir="$HOME/.codex/bin"
 mkdir -p "$command_dir"

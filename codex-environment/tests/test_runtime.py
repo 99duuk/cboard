@@ -72,6 +72,19 @@ class RuntimeTests(unittest.TestCase):
         with mock.patch.object(core,'resolve_cli',return_value=str(executable)), mock.patch.object(subprocess,'Popen',return_value=child):
             self.assertEqual(runtime.run('personal'),143)
 
+    def test_windows_runtime_uses_owned_console_group_and_ctrl_break(self):
+        child = mock.Mock()
+        child.poll.return_value = None
+        child.wait.side_effect = [KeyboardInterrupt(), 0]
+        with mock.patch.object(core, 'resolve_cli', return_value='/native/codex.exe'), \
+             mock.patch.object(runtime.sys, 'platform', 'win32'), \
+             mock.patch.object(subprocess, 'CREATE_NEW_PROCESS_GROUP', 512, create=True), \
+             mock.patch.object(signal, 'CTRL_BREAK_EVENT', 1, create=True), \
+             mock.patch.object(subprocess, 'Popen', return_value=child) as popen:
+            self.assertEqual(runtime.run('personal'), 130)
+        self.assertEqual(popen.call_args.kwargs['creationflags'], 512)
+        child.send_signal.assert_called_once_with(1)
+
     def test_manager_sigterm_forwards_to_native_and_reaps_child(self):
         native=self.root/'native-wait'
         native.write_text('#!'+sys.executable+'\nimport os,signal\nprint("READY",os.getpid(),flush=True)\nwhile True: signal.pause()\n')

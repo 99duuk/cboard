@@ -1,5 +1,4 @@
 import contextlib
-import fcntl
 import io
 import json
 import os
@@ -8,9 +7,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 from codex_env.transaction import Change, Transaction, fingerprint
+from codex_env import transaction
 
 
 class TransactionTests(unittest.TestCase):
@@ -237,11 +238,62 @@ Transaction(state).apply([Change(path, b"new")])
         self.assertFalse(ledger.exists())
 
     def test_concurrent_lock_rejected(self):
-        self.state.mkdir(mode=0o700)
-        with (self.state / 'lock').open('a') as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with self.tx._lock():
             with self.assertRaisesRegex(RuntimeError, 'Another environment transaction'):
                 self.tx.apply([Change(self.root / 'target', b'new')])
+
+    def test_windows_modes_and_directory_sync_boundary(self):
+        with patch.object(transaction, 'WINDOWS', True):
+            self.assertEqual(Transaction._desired(Change(self.root / 'file', b'x'))['mode'], 0o666)
+            self.assertEqual(Transaction._desired(Change(self.root / 'file', b'x', mode=0o400))['mode'], 0o444)
+            with self.assertRaisesRegex(ValueError, 'materialized file content'):
+                Transaction._desired(Change(self.root / 'file', link=self.root / 'source'))
+            with patch.object(transaction.os, 'open') as opened:
+                transaction._sync_directory(self.root)
+            opened.assert_not_called()
+
+    def test_windows_lock_uses_same_byte_and_unlocks_after_failure(self):
+        calls = []
+        def locking(fd, operation, size):
+            calls.append((operation, size, os.lseek(fd, 0, os.SEEK_CUR)))
+        fake = SimpleNamespace(LK_NBLCK=1, LK_UNLCK=2, locking=locking)
+        with patch.object(transaction, 'WINDOWS', True), \
+                patch.object(transaction, 'msvcrt', fake, create=True), \
+                patch.object(transaction, '_private'):
+            with self.assertRaisesRegex(RuntimeError, 'inside'):
+                with self.tx._lock():
+                    raise RuntimeError('inside')
+        self.assertEqual(calls, [(1, 1, 0), (2, 1, 0)])
+        self.assertEqual((self.state / 'lock').read_bytes(), b'\0')
+
+    def test_windows_lock_contention_is_reported(self):
+        def locking(*args):
+            raise PermissionError(13, 'locked')
+        fake = SimpleNamespace(LK_NBLCK=1, LK_UNLCK=2, locking=locking)
+        with patch.object(transaction, 'WINDOWS', True), \
+                patch.object(transaction, 'msvcrt', fake, create=True), \
+                patch.object(transaction, '_private'):
+            with self.assertRaisesRegex(RuntimeError, 'Another environment transaction'):
+                with self.tx._lock():
+                    self.fail('Contended lock acquired')
+
+    def test_windows_private_directory_uses_protected_user_dacl(self):
+        def convert(sddl, revision, descriptor, size):
+            descriptor._obj.value = 123
+            return True
+        api = SimpleNamespace(
+            ConvertStringSecurityDescriptorToSecurityDescriptorW=Mock(side_effect=convert),
+            SetFileSecurityW=Mock(return_value=True))
+        kernel = SimpleNamespace(LocalFree=Mock())
+        with patch.object(transaction, 'WINDOWS', True), \
+                patch.object(transaction, '_windows_sid', return_value='S-1-5-21-123'), \
+                patch.object(transaction.ctypes, 'WinDLL', create=True,
+                             side_effect=[api, kernel]):
+            transaction._private(self.root)
+        sddl = api.ConvertStringSecurityDescriptorToSecurityDescriptorW.call_args.args[0]
+        self.assertEqual(sddl, 'D:P(A;OICI;FA;;;S-1-5-21-123)')
+        self.assertEqual(api.SetFileSecurityW.call_args.args[:2], (str(self.root), 0x80000004))
+        kernel.LocalFree.assert_called_once()
 
     def test_new_file_removed_on_rollback_and_overlap_rejected(self):
         target = self.root / 'new'

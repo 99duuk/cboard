@@ -26,7 +26,21 @@ class PortabilityTests(unittest.TestCase):
             fake_node = base/'fake node executable'
             fake_node.write_text('#!/bin/sh\nprintf "v26.0.0\\n"\n')
             fake_node.chmod(0o755)
-            with mock.patch.object(core, 'ROOT', BUNDLE), \
+            fixture = base/'fixture bundle'
+            shutil.copytree(BUNDLE, fixture, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+            (fixture/'accounts.toml').write_bytes(core.dump({'version':1, 'accounts':[{'id':'demo','home':'~/.codex-demo','aliases':['cdemo']}]}))
+            (fixture/'config/accounts').mkdir(parents=True, exist_ok=True)
+            (fixture/'config/accounts/demo.toml').write_text('')
+            (fixture/'sources.toml').write_bytes(core.dump({'version':1, 'sources':[]}))
+            (fixture/'config/common.toml').write_bytes(core.dump({'mcp_servers':{'rea':{'command':str(fake_node),'args':['${HOME}/.local/share/rea/fixture.js']}},'agents':{'worker':{'config_file':'${ROOT}/assets/agents/worker.toml'}}}))
+            (fixture/'assets/rules/default.rules').write_text('prefix_rule(pattern=["echo", "${HOME}"], decision="allow")\n')
+            (fixture/'assets/skills/uia-e').mkdir(parents=True, exist_ok=True)
+            (fixture/'assets/skills/uia-e/SKILL.md').write_text('# Portable fixture\n')
+            (fixture/'assets/agents/worker.toml').write_text('model = "fixture"\n')
+            export_home = base/'export home'
+            export_home.mkdir()
+            with mock.patch.object(core, 'ROOT', fixture), \
+                 mock.patch.object(Path, 'home', return_value=export_home), \
                  mock.patch.object(tools, 'node_path', return_value=str(fake_node)), \
                  contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(cli.export_bundle(str(archive), include_accounts=True, yes=True), 0)
@@ -97,14 +111,13 @@ class PortabilityTests(unittest.TestCase):
                 self.assertEqual(report.count(': login required'), len(accounts))
                 self.assertNotIn('sync required:', report)
                 self.assertNotIn(': missing skills', report)
-                self.assertIn('REA', report)
-                self.assertRegex(report, r'Ponytail(?: [0-9]+\.[0-9]+\.[0-9]+)? missing')
+                self.assertIn('1 required failure(s)', report)
                 if shutil.which('zsh'):
-                    result = subprocess.run(['zsh','-f','-c','source "$1"; cwork --version',
+                    result = subprocess.run(['zsh','-f','-c','source "$1"; cdemo --version',
                                              '--',str(relocated/'shell/accounts.zsh')],
                                             env={**os.environ, 'HOME': str(new_home), 'CENV_CLI': str(fake_cli)}, capture_output=True,text=True)
                     self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertEqual(result.stdout.strip(), str(new_home/'.codex-work'))
+                    self.assertEqual(result.stdout.strip(), str(new_home/'.codex-demo'))
 
     @unittest.skipUnless(shutil.which('zsh'), 'zsh required')
     def test_default_toolkit_new_user_two_profiles_full_shell_lifecycle(self):

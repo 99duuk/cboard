@@ -71,6 +71,23 @@ class CoreTests(unittest.TestCase):
                      mock.patch('os.access',return_value=True):
                     self.assertEqual(core.resolve_cli(),target)
 
+    def test_windows_cli_resolves_native_npm_package_without_running_cmd(self):
+        package = self.home/'npm/node_modules/@openai/codex-win32-x64'
+        binary = package/'vendor/x86_64-pc-windows-msvc/bin/codex.exe'
+        binary.parent.mkdir(parents=True)
+        binary.write_bytes(b'fixture')
+        binary.chmod(0o755)
+        (package/'package.json').write_text('{"name":"@openai/codex","version":"0.163.0-win32-x64"}')
+        shim = self.home/'npm/codex.cmd'
+        shim.write_text('must not execute')
+        with mock.patch.object(core.sys, 'platform', 'win32'), \
+             mock.patch.object(shutil, 'which', side_effect=lambda name: str(shim) if name == 'codex.cmd' else None), \
+             mock.patch.dict(os.environ, {'CENV_CLI': ''}):
+            self.assertEqual(core.resolve_cli(), str(binary))
+            with mock.patch.dict(os.environ, {'CENV_CLI': str(shim)}):
+                with self.assertRaisesRegex(ValueError, 'native executable'):
+                    core.resolve_cli()
+
     def test_registry_schema_and_display_fields_fail_cleanly(self):
         (self.root/'accounts.toml').write_bytes(core.dump({'version':2,'accounts':self.accounts}))
         with self.assertRaisesRegex(ValueError,'version'):

@@ -31,7 +31,7 @@ def state_dir():
 
 
 def read_toml(path):
-    return tomllib.loads(Path(path).read_text()) if Path(path).exists() else {}
+    return tomllib.loads(Path(path).read_text(encoding="utf-8-sig")) if Path(path).exists() else {}
 
 
 def account_home(account):
@@ -90,20 +90,54 @@ def load_accounts(path=None):
     return accounts
 
 
+def _windows_cli_candidates():
+    """Resolve npm shims to the official package's native executable."""
+    names = [shutil.which('codex.exe'), shutil.which('codex.cmd'), shutil.which('codex')]
+    roots = []
+    for name in names:
+        if name:
+            path = Path(name).expanduser()
+            if path.suffix.lower() == '.exe':
+                yield path
+            roots.append(path.parent/'node_modules/@openai')
+    appdata = os.environ.get('APPDATA')
+    if appdata:
+        roots.append(Path(appdata)/'npm/node_modules/@openai')
+    for root in dict.fromkeys(roots):
+        packages = [root/'codex', *sorted(root.glob('codex-win32-*')),
+                    *sorted((root/'codex/node_modules/@openai').glob('codex-win32-*'))]
+        for package in packages:
+            try:
+                metadata = json.loads((package/'package.json').read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                continue
+            if metadata.get('name') not in {'@openai/codex', '@openai/codex-win32-x64', '@openai/codex-win32-arm64'}:
+                continue
+            paths = list((package/'vendor').glob('*-pc-windows-msvc/bin/codex.exe'))
+            paths += list((package/'vendor').glob('*-pc-windows-msvc/codex/codex.exe'))
+            for path in sorted(paths):
+                if package.resolve() in path.resolve().parents:
+                    yield path
+
+
 def resolve_cli():
     settings = read_toml(local_dir() / 'local.toml')
     explicit = os.environ.get('CENV_CLI') or settings.get('cli')
-    candidates = [explicit] if explicit else ['/opt/homebrew/bin/codex', '/usr/local/bin/codex', shutil.which('codex')]
+    windows = sys.platform == 'win32'
+    candidates = ([explicit] if explicit else list(_windows_cli_candidates()) if windows else
+                  ['/opt/homebrew/bin/codex', '/usr/local/bin/codex', shutil.which('codex')])
     for name in candidates:
         if not name:
             continue
         path = Path(name).expanduser()
         if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
             continue
-        if path == Path.home()/'.local/bin/codex' or path.resolve() in {(ROOT/'bin/cenv').resolve(), (ROOT/'bin/cusage').resolve()}:
+        if windows and path.suffix.lower() != '.exe':
+            continue
+        if (not sys.platform.startswith('linux') and path == Path.home()/'.local/bin/codex') or path.resolve() in {(ROOT/'bin/cenv').resolve(), (ROOT/'bin/cusage').resolve()}:
             continue
         return str(path)
-    raise ValueError('Codex CLI missing; install Codex or set cli in ~/.config/codex-environment/local.toml')
+    raise ValueError('Codex CLI missing; install @openai/codex or set CENV_CLI to its native executable')
 
 
 def dump(data):
@@ -251,30 +285,31 @@ def config_changes(accounts, account_overrides=None):
     return changes
 
 
-def shell_text(accounts, cli):
+def shell_text(accounts, cli=None, shell="zsh"):
     q = shlex.quote
     executable = q(str(ROOT/'bin/cenv'))
     aliases = [alias for account in accounts for alias in account['aliases'] if alias != 'codex']
     names = ['codex','cenv','cnew','cdel','chelp','clist','clogin','ccurrent','cuse','cdefault','crun','cusage','creset']
     lines = ['# Generated account functions; no config writes or network during loading.',
+             'case ":$PATH:" in *":$HOME/.codex/bin:"*) ;; *) export PATH="$HOME/.codex/bin:$PATH" ;; esac',
              'if (( ${+_CENV_ALIASES} )); then',
-             '  for _cenv_alias in "${_CENV_ALIASES[@]}"; do unfunction "$_cenv_alias" 2>/dev/null; done',
+             '  for _cenv_alias in "${_CENV_ALIASES[@]}"; do unfunction "$_cenv_alias" 2>/dev/null || true; done',
              'fi',
              'typeset -ga _CENV_ALIASES=('+ ' '.join(q(n) for n in aliases)+')',
-             'unalias '+ ' '.join(names+aliases)+' 2>/dev/null',
+             'unalias '+ ' '.join(names+aliases)+' 2>/dev/null || true',
              'if (( ! ${+CENV_DEFAULT_ACCOUNT} )); then',
              f'  _cenv_default="$({executable} _default)" || return $?',
              '  export CENV_DEFAULT_ACCOUNT="$_cenv_default"',
              '  unset _cenv_default',
              'fi',
              'cenv() {', f'  {executable} "$@"', '  local _cenv_status=$?',
-             '  if [[ "$1:$2" == account:remove && -n "${CENV_ACCOUNT:-}" ]]; then',
+             '  if [[ "${1:-}:${2:-}" == account:remove && -n "${CENV_ACCOUNT:-}" ]]; then',
              f'    {executable} _exists "$CENV_ACCOUNT" >/dev/null 2>&1 || unset CENV_ACCOUNT',
              '  fi',
-             '  if [[ "$1:$2" == account:remove && -n "${CENV_DEFAULT_ACCOUNT:-}" ]]; then',
+             '  if [[ "${1:-}:${2:-}" == account:remove && -n "${CENV_DEFAULT_ACCOUNT:-}" ]]; then',
              f'    {executable} _exists "$CENV_DEFAULT_ACCOUNT" >/dev/null 2>&1 || export CENV_DEFAULT_ACCOUNT=""',
              '  fi',
-             '  case "$1:$2" in',
+             '  case "${1:-}:${2:-}" in',
              '    install:*|sync:*|rollback:*|account:add|account:remove|account:import)',
              '      [[ ! -r "$HOME/.config/codex-environment/shell.zsh" ]] || source "$HOME/.config/codex-environment/shell.zsh" ;;',
              '  esac', '  return $_cenv_status', '}',
@@ -290,8 +325,8 @@ def shell_text(accounts, cli):
              'cusage() { cenv usage "$@"; }',
              'creset() { cenv usage --resets "$@"; }',
              'cuse() {',
-             '  if [[ "$1" == --help || "$1" == -h ]]; then cenv use "$@"; return $?; fi',
-             '  if [[ "$1" == --clear && $# == 1 ]]; then unset CENV_ACCOUNT; return 0; fi',
+             '  if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then cenv use "$@"; return $?; fi',
+             '  if [[ "${1:-}" == --clear && $# == 1 ]]; then unset CENV_ACCOUNT; return 0; fi',
              '  local _cenv_selected',
              f'  _cenv_selected="$({executable} _select "$@")" || return $?',
              '  export CENV_ACCOUNT="$_cenv_selected"', '}' ]
@@ -299,14 +334,30 @@ def shell_text(accounts, cli):
         for alias in account['aliases']:
             if alias != 'codex':
                 lines.append(f'{alias}() {{ cenv run {q(account["id"])} -- "$@"; }}')
-    return '\n'.join(lines)+'\n'
+    text = '\n'.join(lines)+'\n'
+    if shell == 'bash':
+        text = text.replace('if (( ${+_CENV_ALIASES} )); then', 'if declare -p _CENV_ALIASES >/dev/null 2>&1; then')
+        text = text.replace('unfunction "$_cenv_alias"', 'unset -f "$_cenv_alias"')
+        text = text.replace('typeset -ga _CENV_ALIASES=', '_CENV_ALIASES=')
+        text = text.replace('if (( ! ${+CENV_DEFAULT_ACCOUNT} )); then', 'if [[ ! ${CENV_DEFAULT_ACCOUNT+x} ]]; then')
+        text = text.replace('shell.zsh', 'shell.bash')
+    return text
 
 
-def shell_block():
-    return f'{BEGIN}\nif [[ -r "$HOME/.config/codex-environment/shell.zsh" ]]; then\n  source "$HOME/.config/codex-environment/shell.zsh"\nfi\n{END}'
+def shell_changes(accounts):
+    from .transaction import Change, fingerprint
+    changes = []
+    for shell in ('zsh', 'bash'):
+        path = ROOT/f'shell/accounts.{shell}'
+        changes.append(Change(path, content=shell_text(accounts, shell=shell).encode(), mode=0o644, expected=fingerprint(path)))
+    return changes
 
 
-def update_shell(text, migrate=False, managed_names=()):
+def shell_block(shell='zsh'):
+    return f'{BEGIN}\nif [ -r "$HOME/.config/codex-environment/shell.{shell}" ]; then\n  . "$HOME/.config/codex-environment/shell.{shell}"\nfi\n{END}'
+
+
+def update_shell(text, migrate=False, managed_names=(), shell="zsh"):
     if BEGIN in text:
         if text.count(BEGIN) != 1 or text.count(END) != 1 or text.index(END)<text.index(BEGIN):
             raise ValueError('malformed managed shell block')
@@ -325,22 +376,28 @@ def update_shell(text, migrate=False, managed_names=()):
         escaped = re.escape(name)
         if re.search(r'^\s*(?:function\s+'+escaped+r'(?:\s|\()|'+escaped+r'\s*\(\s*\)|alias\s+'+escaped+r'=)', text, re.M):
             raise ValueError(f'shell command collision: {name}; rename or remove the existing definition before install')
-    return text.rstrip()+'\n\n'+shell_block()+'\n'
+    return text.rstrip()+'\n\n'+shell_block(shell)+'\n'
 
 
 def install_changes(accounts):
+    if os.name == "nt":
+        from .windows import install_changes as windows_install
+        return windows_install(accounts)
     from .assets import asset_links
     from .transaction import Change, fingerprint
     changes = config_changes(accounts)
     for dest, source in asset_links(ROOT, Path.home(), accounts):
         changes.append(Change(dest, link=source, expected=fingerprint(dest)))
-    cli = resolve_cli()
-    path = ROOT/'shell/accounts.zsh'
-    changes.append(Change(path, content=shell_text(accounts, cli).encode(), mode=0o644, expected=fingerprint(path)))
-    pointer = local_dir()/'shell.zsh'
-    changes.append(Change(pointer, link=path, expected=fingerprint(pointer)))
+    changes += shell_changes(accounts)
+    for shell in ('zsh', 'bash'):
+        pointer = local_dir()/f'shell.{shell}'
+        changes.append(Change(pointer, link=ROOT/f'shell/accounts.{shell}', expected=fingerprint(pointer)))
     shell_files = set()
-    for file in [Path.home()/'.zshrc', Path.home()/'.dotfiles/zsh/.zshrc']:
+    startup_files = [(Path.home()/'.zshrc', 'zsh'), (Path.home()/'.dotfiles/zsh/.zshrc', 'zsh')]
+    if sys.platform.startswith('linux'):
+        startup_files += [(Path.home()/'.bashrc', 'bash')]
+        startup_files += [(Path.home()/'.bash_profile', 'bash')] if (Path.home()/'.bash_profile').exists() else []
+    for file, shell in startup_files:
         if file.parent.exists():
             if file.is_symlink():
                 if not file.exists():
@@ -350,11 +407,15 @@ def install_changes(accounts):
                 continue
             shell_files.add(file)
             original = file.read_text() if file.exists() else ''
-            changes.append(Change(file, content=update_shell(original, migrate=True, managed_names={'codex','cenv','cnew','cdel','chelp','clist','clogin','ccurrent','cuse','cdefault','crun','cusage','creset'} | {n for a in accounts for n in a['aliases']}).encode(), mode=0o644, expected=fingerprint(file)))
+            changes.append(Change(file, content=update_shell(original, migrate=True, shell=shell, managed_names={'codex','cenv','cnew','cdel','chelp','clist','clogin','ccurrent','cuse','cdefault','crun','cusage','creset'} | {n for a in accounts for n in a['aliases']}).encode(), mode=0o644, expected=fingerprint(file)))
     for name in ['cenv','cusage','creset','cnew','cdel','chelp','clist','clogin','ccurrent','cuse','cdefault','crun']:
         dest = Path.home()/'.codex/bin'/name
         changes.append(Change(dest, link=ROOT/'bin'/name, expected=fingerprint(dest)))
     local = local_dir()/'local.toml'
     if not local.exists():
-        changes.append(Change(local, content=dump({'cli': cli}), expected=fingerprint(local)))
+        try:
+            settings = {'cli': resolve_cli()}
+        except ValueError:
+            settings = {}
+        changes.append(Change(local, content=dump(settings), expected=fingerprint(local)))
     return changes
